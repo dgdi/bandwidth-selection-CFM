@@ -1,0 +1,1815 @@
+---
+title: "Report on the Accuracy of Ker_LSCV_OUT.R in reproducing Ker_LSCV_OUT.m 
+- Separability Condition -"
+author: "Duccio Gamannossi degl'Innocenti"
+date: "25/01/2016"
+output: pdf_document
+---
+
+##Overview
+
+---
+
+In this report it is assessed the accuracy of the R function `Ker_LSCV_OUT.R`
+in reproducing the MATLAB function `Ker_LSCV_OUT.m` proposed in:
+
+["Optimal bandwidth selection for conditional efficiency measures: a data-driven approach." European Journal of Operational Research 201.2 (2010): 633-640.](http://www.sciencedirect.com/science/article/pii/S0377221709002148)  
+by Luiza Badin, Cinzia Daraio and Leopold Simar.
+
+The analysis is focused on the reliablity of the `R` script in both cases where data that fullfills and data does not fullfill the separability condition. In particular, the investigation is performed using simulated data produced according to the two DGPs presented in 
+
+["Two-stage DEA: caveat emptor." Journal of Productivity Analysis 36.2 (2011):205-218.](http://link.springer.com/article/10.1007/s11123-011-0230-6)
+by Leopold Simar and Paul W. Wilson.
+
+---
+
+##Procedure 
+The assessment procedure is realized in three steps embodied in the `R` scripts:
+
+1. `validation.R`
+
+2. `validation.m`
+
+3. `validation_assessment.Rmd`
+
+___First Step___
+
+The script takes as input two parameters: `n`, the number of observations in each sample, and `r`, the number of samples/datasets to be generated. In the present report, `n=100` and `r=100`.
+
+Three outputs are generated in this step:
+
+* r `MATLAB` datasets (`validation_r.mat` files) generated according to the two DGPs presented in the paper: one such that separability holds, from now on the "Separable" case, and one where separability does not hold, the "Non-Separable" case. For more information on the two DGPs, see the simulation paragraph of the above-mentioned paper.
+
+* A comma separated values `seeds.csv` , where seeds used in the generation of every dataset are stored to ensure reproducibility
+
+* For every generated dataset, two csv files are produced: `CV_ce_R_r.csv` and `CV_ce_exp_R_r.csv`. These files store the Least Squares Cross Validation Error (LSCVE) as obtained by applying `Ker_LSCV_OUT.R` to the Separable and Non-Separable data.
+
+The data stored in the `MATALAB` dataset may be divided in four classes: Input $X$, Output $Y$, Environmental Variables $Z$ and Bandwidths. Let us define an observation as a triple $(x_{ij}, y_{ij}, z_{ij})$ $i \in [1,n]$ $j \in [1,r]$. The function `Ker_LSCV_OUT.R` evaluates the LSCVE of a bandwidth for a given observation $i$ with respect to the sample $j$. The bandwidth is composed by an univariate bandwidth for the output vector $Y$ and one univariate bandwidth for every element of the Environmental Variable vector $Z$. A set of (multidimensional)
+bandwidths is generated taking all the possible ordered selections with repetition of unidimensional bandwidths.
+Unidimensional bandwidths are obtained by multiplying the standard deviation of the corresponding
+variable (the mean of the standard deviation across all variables for $Y$)  by the following vector of coefficients:
+
+```{r, echo=FALSE, results="asis", warning=FALSE}
+library(pander)
+h0one=t(c(seq(from=0.3, to=2.1, by=0.3),seq(from=2.5, to=3, by=0.5)))
+names(h0one)<-sapply(1:9, function(d){paste0("C",d)})
+pandoc.table(h0one,style="rmarkdown", split.tables=999, caption="Coefficients", split.cells = rep(1,9))
+```
+
+Since an unidimensional bandwidth is adopted for $Y$, and given that both DGPs considered entail a two-dimensional $Z$, the multivariate bandwidth considered are  three-dimensional. Given that the vector of coefficients has nine elements, $9^{3}=729$ bandwidths are considered for the two DGPs. 
+
+___Second Step___
+
+The second script reads in MATLAB the `.mat` files written in the previous step and computes the LSCVEs using `KeR_LSCV_OUT.m`. The output consists of two csv files, `CV_ce_M_r.csv` and `CV_ce_exp_M_r.csv`, for every dataset.
+
+___Third Step___
+
+In the third step (performed by this script) the LSCVEs obtained by the two functions are compared. The information provided by the present report concerns the possible discrepancies in the values of LSCVEs computed by the two functions in terms of: `NA` elements, ` 0 ` elements, Absolute Difference and Relative Difference (the latter one taking as correct the output of `Ker_LSCV_OUT.m`). Furthermore, an assessment of Mismatches in the bandwidths rankings produced by the two functions is provided. The key measures reported are the number of cases where the two functions do not agree on bandwidth ranking, the number of cases in which functions fail to agree on the lowest-LSCVE bandwidth and the difference in the sum of absolute LSCVEs between the sets of lowest-LSCVE bandwidth identified by the two functions.
+
+
+```{r, echo=FALSE, results='hide', warning=FALSE}
+library(scales)
+library(grid)
+library(gridExtra)
+library(ggplot2)
+library(spatialEco)
+library(pander)
+library(data.table)
+library(gtools)
+```
+
+
+\pagebreak
+
+---
+
+##Accuracy Assessment, Separable DGP
+
+---
+
+```{r, echo=FALSE, results='hide', warning=FALSE, }
+r=100
+NamesCV_M<-sapply(1:r, function(d){paste0("CV_ce_M_", d,".csv")})
+NamesCV_R<-sapply(1:r, function(d){paste0("CV_ce_R_", d,".csv")})
+CV_M<-lapply(NamesCV_M, function(d){
+        read.table(d, header=FALSE, as.is=TRUE, colClasses= rep("numeric",9) )})
+CV_R<-lapply(NamesCV_R, function(d){
+        read.table(d, header=FALSE, as.is=TRUE, colClasses= rep("numeric",9))})
+#checking if there are discrepancies in CV identified as NA
+diffNA<-sum(sapply(1:r, function(d){
+        sum(is.na(CV_M[[d]])!=is.na(CV_R[[d]]))}))
+#NA handling
+nNA_M<-sum(sapply(1:r, function(d){
+        (is.na(CV_M[[d]]))}))
+nNA_R<-sum(sapply(1:r, function(d){
+        (is.na(CV_R[[d]]))}))
+equlnNA<-nNA_M==nNA_R
+nNA<-nNA_R
+#Since there are no NA there is no need for NA handling. Nevertheless,
+#the dataset is renamed to display the absence of NAs
+noNA_M<-CV_M
+noNA_R<-CV_R
+#number of zero-valued CVs
+nZero<-sum(unlist(sapply(noNA_M, function(d){d==0})))
+#checking if there are discrepancies in CV when CV=0 
+diffZero<-sum(sum(sapply(1:length(noNA_M), function(d){
+        sum((noNA_M[[d]]==0)!=(noNA_R[[d]]==0))})))
+#Checking magnitude of differences for no-NA values
+absDiff<-lapply(1:length(noNA_M), function(d){
+        abs(noNA_M[[d]]-noNA_R[[d]])})
+
+#number of occourrences of a difference in the CVs from the two functions
+#lower than 15 digits
+nNoDiff<-sum(unlist(lapply(absDiff, function(d){d==0}))) 
+
+#max of relative error for every band in every repetition
+absMaxBand<-lapply(absDiff,function(d){
+                                apply(d, 2, function(g){
+                                        max(g[complete.cases(g)],na.rm=TRUE)
+                                                        }
+                                        )}
+                        )
+
+#max of absolute error for every band across all the repetitions
+absMaxBandRep<-lapply(
+                        sapply(1:length(absMaxBand[[1]]),function(d){
+                                sapply(1:(length(absMaxBand)),function(g){
+                                        absMaxBand[[g]][d]      
+                                }, USE.NAMES=FALSE)
+                        },simplify=FALSE,USE.NAMES=FALSE),
+                max)
+
+#max of absolute error for every observation in every repetition
+absMaxObs<-lapply(absDiff,function(d){
+                        apply(d, 1, function(g){
+                                max(g[complete.cases(g)],na.rm=TRUE)
+                        })
+                })
+
+#max of absolute error across the whole sample
+absmaxWhole<-max(unlist(absDiff), na.rm=TRUE)
+
+relDiff<-sapply(1:length(noNA_M),function(d){
+                sapply(1:(nrow(noNA_M[[d]])),function(i){
+                        sapply(1:(length(noNA_M[[d]][i,])),function(j){
+100*abs((noNA_M[[d]][i,j]-noNA_R[[d]][i,j])/noNA_M[[d]][i,j])
+                        }, USE.NAMES=FALSE)
+                }, USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+relDiff<-lapply(relDiff,t)
+
+#max of relative error for every band in every repetition
+relMaxBand<-lapply(relDiff,function(d){
+                        apply(d, 2, function(g){
+                                max(g[complete.cases(g)],na.rm=TRUE)
+                        })
+                })
+
+#max of relative error for every band across all the repetitions
+relMaxBandRep<-lapply(
+                        sapply(1:length(relMaxBand[[1]]),function(d){
+                                sapply(1:(length(relMaxBand)),function(g){
+                                        relMaxBand[[g]][d]      
+                                }, USE.NAMES=FALSE)
+                        },simplify=FALSE,USE.NAMES=FALSE),
+                max)
+
+#max of relative error for every observation in every repetition
+relMaxObs<-lapply(relDiff,function(d){
+                        apply(d, 1, function(g){
+                                max(g[complete.cases(g)],na.rm=TRUE)
+                        })
+                })
+#max of relative error across the whole sample
+relmaxWhole<-max(unlist(relDiff), na.rm=TRUE)
+```
+
+The Multidimensional dataset consists of $`r r`$ repetitions of a sample of $`r unique(lapply(CV_M, nrow))`$ observations and $`r unique(lapply(CV_M, ncol))`$ bandwidths for a total of 729 $\times$ 100 $\times$ 100 = `r length(unlist(noNA_M)) ` observations.
+The two routines compute a zero LSCVE value in the exact same points for $`r nZero`$ occurrences (the `r round((nZero/length(unlist(noNA_M)))*100,2) ` % of cases). Furthermore, the number of NAs is $`r diffNA`$.
+The LSCVEs computed by the two functions show a difference lower than 15th digit for $`r nNoDiff`$ observations (the `r round((nNoDiff/length(unlist(noNA_M)))*100,2)` % of cases). The Maximum Absolute Difference has a magnitude of $`r absmaxWhole`$, while the Maximum Relative Difference is $`r relmaxWhole`$.
+Density plots of the Absolute and Relative Differences between LSCVEs computed with the `MATLAB` and `R` functions are displayed below.
+
+```{r, echo=FALSE, results='hide', }
+#converting data to data.frame format for ggplot
+bands=729
+dfAbsDiff<-data.frame(
+        abs=unlist(absDiff), Bandwidth=as.vector(rep(
+                                mapply(rep,1:bands, rep(100,bands)),
+                                length(absDiff)))
+        )
+
+lRel<-lapply(relDiff, function(d){
+                sapply(1:length(d), function(g){
+                length(d[[g]])
+                })
+        })
+
+dfRelDiff<-data.frame(
+        rel=unlist(relDiff), Bandwidth=unlist(rep(
+                                lapply(lRel, function(d){
+                                        mapply(rep,1:bands,d)
+                                })))
+                        )
+```
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.5, }
+
+###Plotting Densities###
+absGraph <- 
+        ggplot(dfAbsDiff, aes(x = abs)) +
+        geom_density(aes(group = Bandwidth, colour = Bandwidth, fill=Bandwidth), alpha=.1) +
+        labs(title="Density plot of Absolute Difference", y="PDF") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+        panel.grid=element_blank(),
+        axis.text=element_text(size=rel(1.3)),
+        axis.title=element_text(size=rel(1.5)),
+        axis.ticks.length = unit(.3, "cm"),
+        legend.key.size = unit(0.5, "cm"),
+        legend.text = element_text(size = 15)) +
+        scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+        labels = trans_format("log10", math_format(10^.x)),
+        "Absolute Difference",
+        limits = (c(5e-21, 1e-11))) 
+relGraph <- ggplot(dfRelDiff, aes(x = rel)) +
+        geom_density(aes(group = Bandwidth, colour = Bandwidth, fill = Bandwidth), alpha=.2) +
+        labs(title="Density plot of Relative Difference", y="PDF") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+        panel.grid=element_blank(),
+        axis.text=element_text(size=rel(1.3)), 
+        axis.title=element_text(size=rel(1.5)),
+        axis.ticks.length = unit(.3, "cm"),
+        legend.key.size = unit(0.5, "cm"),
+        legend.text = element_text(size = 15))+
+        scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+        labels = trans_format("log10", math_format(10^.x)),
+        "Relative Difference",
+        limits = c(1e-15, 5e-10)) +
+        scale_fill_gradient(low="darkgreen", high="aquamarine" ) +
+        scale_colour_gradient(low="darkgreen", high="aquamarine" )
+grid.arrange(absGraph, relGraph, nrow=2)
+```
+
+As it can be seen from the graph, the Absolute Difference varies in a range of $10^{-20}$ - $10^{-11}$ while Relative Difference varies in the range $10^{-15}$ - $10^{-10}$. Notably, while the Absolute Difference shows some variability with respect to the bandwidth, the normalization with respect to the LSCVE almost removes it leading to distributions that are essentially overlapped.
+Notably, the differences between the LSCVEs computed by the two scripts are extremely small both in absolute and in relative terms and their relative impact (on LSCVE computed with `MATLAB` function) tends to be stable across the different bandwidths.  
+
+In order to further investigate how the differences between the LSCVEs computed by the two routines vary with bandwidths, some tile plots are reported. 
+In the first and second plot, Medium and Maximum Absolute Difference are considered; as the variable goes from lower to higher values, the colour of tiles change from blue to red. The third and fourth graph show Medium and Maximum Relative Difference; a growth in the two variables is represented in the plot with a transition of the tile colour from green to yellow. In the fifth tileplot an increase in the relative percentage of Zero-differences is represented by darker tiles, while in the sixth a higher relative Percentage of Mismatch in the lowest-LSCVE bandwidth leads to a variation of the colour of the tile from white to red. The fifth plot provides information on the number of observations where the two functions LSCVEs have a non-measurable difference and, hence, on the number of Relative Difference observations that can be computed for every bandwidth. The sixth graph is crucial for the purposes of the present report. In fact, in an applicative setting the function `Ker_LSCV_OUT` is used to identify the bandwidth entailing the lowest Least Squares Cross Validation Error for an observation. Hence, when evaluating a set of bandwidths on a sample, its outcome is intended to be the set of bandwidths that minimizes the LSCVE according to a certain criterion (in the present report, two criteria are considered: the minimum mean LSCVE across observations and minimum-LSCVE for every observation). Hence, any meaningful measure of the correctness of the `R` function has to assess the impact of the cases (if any) where it fails to select the same minimum-LSCVE bandwidth identified by the `MATLAB` function. From this point of view, Absolute and Relative Difference may be interpreted as proxies of the validity of the `R` function, since directly related to bandwidth rankings. However, the information provided by these measures is not enough to infer nor changes in the rank of bandwidths nor changes of minimum-LSCVE bandwidths. 
+
+```{r, echo=FALSE, results='hide', warning=FALSE }
+
+###Plotting zeros, heatmap and medium absolute error by bandwidth###
+
+#Preparing Vector of Bandwidths
+
+h0=t(c(seq(from=0.3, to=2.1, by=0.3),seq(from=2.5, to=3, by=0.5)))
+hPerm<-permutations(n=9,r=3,v=h0,repeats.allowed=T)
+
+dtHPerm<-data.table(hPerm, Bandwidth=seq_along(hPerm[,1]))
+setkey(dtHPerm, Bandwidth)
+
+#Preparing data for Zeros Tileplots 
+
+dfNoNA_M<-data.frame(
+        abs=unlist(noNA_M), Bandwidth=as.vector(rep(
+                                mapply(rep,1:bands, rep(100,bands)),
+                                length(noNA_M)))
+        )
+
+zeroDfNoNA_M<-dfNoNA_M[dfNoNA_M[, 1]==0, ]
+zeroDtNoNA_M<-data.table(zeroDfNoNA_M)
+BandZeroDtNoNA_M<-zeroDtNoNA_M[,.N,by=Bandwidth]
+BandZeroDtNoNA_M[, N := (N/10000)]
+setkey(BandZeroDtNoNA_M, Bandwidth)
+BandZeroDtNoNA_M <- BandZeroDtNoNA_M[dtHPerm]
+setnames(BandZeroDtNoNA_M,c("Bandwidth","Zeros", "y", "z1", "z2"))
+yz1BandZeroDtNoNA_M <- BandZeroDtNoNA_M[ ,.(Zeros=max(Zeros)),by=.(y,z1)]
+yz2BandZeroDtNoNA_M <- BandZeroDtNoNA_M[ ,.(Zeros=max(Zeros)),by=.(y,z2)]
+z1z2BandZeroDtNoNA_M <- BandZeroDtNoNA_M[ ,.(Zeros=max(Zeros)),by=.(z1,z2)]
+        
+      
+#Preparing Data for Absolute Difference Tileplots 
+dtAbsDiff<-data.table(dfAbsDiff)
+dtAbsDiff<-dtAbsDiff[,.(Mean = mean(abs), Max = max(abs)), by=Bandwidth]
+setkey(dtAbsDiff, Bandwidth)
+bandDtAbsDiff<-dtAbsDiff[dtHPerm]
+setnames(bandDtAbsDiff,c("Bandwidth", "Mean", "Max", "y", "z1", "z2"))
+yz1bandDtAbsDiff <- bandDtAbsDiff[ ,.(Mean=max(Mean), Max=max(Max)),by=.(y,z1)]
+yz2bandDtAbsDiff <- bandDtAbsDiff[ ,.(Mean=max(Mean), Max=max(Max)),by=.(y,z2)]
+z1z2bandDtAbsDiff <- bandDtAbsDiff[ ,.(Mean=max(Mean), Max=max(Max)),by=.(z1,z2)]
+
+
+#Preparing Data for Relative Difference Tileplots 
+
+lRel<-lapply(relDiff, function(d){
+                sapply(1:length(d), function(g){
+                length(d[[g]])
+                })
+        })
+
+dfRelDiff<-data.frame(
+        rel=unlist(relDiff), Bandwidth=unlist(rep(
+                                lapply(lRel, function(d){
+                                        mapply(rep,1:bands,d)
+                                })))
+                        )
+
+dtRelDiff<-data.table(dfRelDiff)
+dtRelDiff<-dtRelDiff[,.(Mean = mean(rel, na.rm=TRUE), Max = max(rel[complete.cases(rel)])), by=Bandwidth]
+setkey(dtRelDiff, Bandwidth)
+bandDtRelDiff<-dtRelDiff[dtHPerm]
+setnames(bandDtRelDiff,c("Bandwidth", "Mean", "Max", "y", "z1", "z2"))
+yz1bandDtRelDiff <- bandDtRelDiff[ ,.(Mean=max(Mean), Max=max(Max)),by=.(y,z1)]
+yz2bandDtRelDiff <- bandDtRelDiff[ ,.(Mean=max(Mean), Max=max(Max)),by=.(y,z2)]
+z1z2bandDtRelDiff <- bandDtRelDiff[ ,.(Mean=max(Mean), Max=max(Max)),by=.(z1,z2)]
+
+#Preparing Data for Mismatches Tileplots
+
+##################################
+##     Code Moved for plot      ##
+##################################
+absNoNA_M<-lapply(noNA_M, abs)
+absNoNA_R<-lapply(noNA_R, abs)
+
+#Cases s.t. mismatch affect the best bandwidth
+mismUneffObs<-sapply(1:length(absNoNA_M), function(d){
+                sapply(1:nrow(absNoNA_M[[d]]), function(g){
+                        which.min(absNoNA_M[[d]][g, ]) !=
+                        which.min(absNoNA_R[[d]][g, ])
+                },USE.NAMES=FALSE)
+        },simplify=FALSE,USE.NAMES=FALSE
+)
+
+mism<-lapply(mismUneffObs, function(d){names(d[d==TRUE])})
+mismDt<-data.table(Mismatches=table(unlist(mism)),
+                       Bandwidth=as.numeric(
+                               gsub("V", "", names(table(unlist(mism))))))
+#Adding the Bandwidth without relevant mismatches 
+mismDt<-data.table(Bandwidth=c(mismDt[, Bandwidth],which(!(c(1:bands) %in% mismDt[, Bandwidth]))), Mismatches=c(mismDt[, Mismatches],rep(0,bands-(length(mismDt[, Mismatches])))) )
+mismDt<-mismDt[order(rank(Bandwidth))]
+setkey(mismDt, Bandwidth)
+#Merging for univariate bandwidth values
+BandmismDt<-mismDt[dtHPerm]
+setnames(BandmismDt, c("Bandwidth", "Mismatches", "y", "z1", "z2"))
+yz1BandmismDt <- BandmismDt[ ,.(Mismatches=max(Mismatches)/100),by=.(y,z1)]
+yz2BandmismDt <- BandmismDt[ ,.(Mismatches=max(Mismatches)/100),by=.(y,z2)]
+z1z2BandmismDt <- BandmismDt[ ,.(Mismatches=max(Mismatches)/100),by=.(z1,z2)]
+
+# Y Z1 Plots
+
+yz1PlotBandZeroDtNoNA_M <-ggplot(yz1BandZeroDtNoNA_M, aes(x = z1, y = y, fill = Zeros)) +
+        geom_tile() +
+        scale_fill_gradient(low="ghostwhite", high="black" , 
+                            breaks = c(0.28,0.46)) +
+        theme_bw()+
+        labs(title="Percentage of Zeros by Bandwidth", y= "Y", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+
+yz1PlotMeanBandDtAbsDiff<-ggplot(yz1bandDtAbsDiff, aes(x = z1, y = y, fill = Mean)) +
+        geom_tile() +
+        scale_fill_gradient(low="dodgerblue3", high="red",
+                            breaks = c(1.13e-16, 3.54e-14)) +
+        theme_bw()+
+        labs(title="Tile plot of Mean Absolute Difference", y= "Y", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+yz1PlotMaxBandDtAbsDiff<-ggplot(yz1bandDtAbsDiff, aes(x = z1, y = y, fill = Max)) +
+        geom_tile() +
+        scale_fill_gradient(low="red3", high="firebrick4",
+                            breaks = c(6.22e-15, 5.22e-12)) +
+        theme_bw()+
+        labs(title="Tile plot of Max Absolute Difference", y= "Y", x="Z1") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+yz1PlotMeanBandDtRelDiff<-ggplot(bandDtRelDiff, aes(x = z1, y = y, fill = Mean)) +
+        geom_tile() +
+        scale_fill_gradient(low="darkgreen", high="olivedrab3",
+                            breaks = c(1.51e-13, 1.43e-11)) +
+        theme_bw()+
+        labs(title="Tile plot of Mean Relative Difference", y= "Y", x="Z1") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+
+yz1PlotMaxBandDtRelDiff<-ggplot(bandDtRelDiff, aes(x = z1, y = y , fill = Max)) +
+                geom_tile() +
+        scale_fill_gradient(low="olivedrab2", high="gold1",
+                            breaks = c(1.66e-11, 1.08e-07)) +
+        theme_bw()+
+        labs(title="Tile plot of Max Relative Difference", y= "Y", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+yz1plotBandmismDt <-ggplot(yz1BandmismDt, aes(x = z1, y = y, fill = Mismatches)) +
+        geom_tile() +
+        scale_fill_gradient(low="ghostwhite", high="red" , 
+                            breaks = c(0.00, 0.13)) +
+        theme_bw()+
+        labs(title="Percentage of Mismatches by Bandwidth", y= "Y", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+# Y Z2 Plots
+
+yz2PlotBandZeroDtNoNA_M <-ggplot(yz2BandZeroDtNoNA_M, aes(x = z2, y = y, fill = Zeros)) +
+        geom_tile() +
+        scale_fill_gradient(low="ghostwhite", high="black" , 
+                            breaks = c(
+        round(min(yz2BandZeroDtNoNA_M[,Zeros])+
+                (min(yz2BandZeroDtNoNA_M[,Zeros])/100),2),
+        round(max(yz2BandZeroDtNoNA_M[,Zeros])-
+                (max(yz2BandZeroDtNoNA_M[,Zeros])/100),2))) +
+        theme_bw()+
+        labs(title="Percentage of Zeros by Bandwidth", y= "Y", x="Z2") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+
+yz2PlotMeanBandDtAbsDiff<-ggplot(yz2bandDtAbsDiff, aes(x = z2, y = y, fill = Mean)) +
+        geom_tile() +
+        scale_fill_gradient(low="dodgerblue3", high="red",
+                            breaks = c(9.99e-17, 3.54e-14)) +
+        theme_bw()+
+        labs(title="Tile plot of Mean Absolute Difference", y= "Y", x="Z2") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+yz2PlotMaxBandDtAbsDiff<-ggplot(yz2bandDtAbsDiff, aes(x = z2, y = y, fill = Max)) +
+        geom_tile() +
+        scale_fill_gradient(low="red3", high="firebrick4", 
+                           breaks = c(6.67e-15, 5.22e-12)) +
+        theme_bw()+
+        labs(title="Tile plot of Max Absolute Difference", y= "Y", x="Z2") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+yz2PlotMeanBandDtRelDiff<-ggplot(bandDtRelDiff, aes(x = z2, y = y , fill = Mean)) +
+        geom_tile() +
+        scale_fill_gradient(low="darkgreen", high="olivedrab3", 
+                           breaks = c(1.51e-13, 1.43e-11)) +
+        theme_bw()+
+        labs(title="Tile plot of Mean Relative Difference", y= "Y", x="Z2") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+
+yz2PlotMaxBandDtRelDiff<-ggplot(bandDtRelDiff, aes(x = z2, y = y , fill = Max)) +
+        
+        geom_tile() +
+        scale_fill_gradient(low="olivedrab2", high="gold1", 
+                           breaks = c(1.66e-11, 1.08e-07)) +
+        theme_bw()+
+        labs(title="Tile plot of Max Relative Difference", y= "Y", x="Z2") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+yz2plotBandmismDt <-ggplot(yz2BandmismDt, aes(x = z2, y = y, fill = Mismatches)) +
+        geom_tile() +
+        scale_fill_gradient(low="ghostwhite", high="red" , 
+                            breaks = c(0.00, 0.13)) +
+        theme_bw()+
+        labs(title="Percentage of Mismatches by Bandwidth", y= "Y", x="Z2") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+# Z1 Z2 Plots
+
+z1z2PlotBandZeroDtNoNA_M <-ggplot(z1z2BandZeroDtNoNA_M, aes(x = z1, y = z2, fill = Zeros)) +
+        geom_tile() +
+        scale_fill_gradient(low="ghostwhite", high="black" , 
+                            breaks = c(
+        round(min(z1z2BandZeroDtNoNA_M[,Zeros])+
+                (min(yz1BandZeroDtNoNA_M[,Zeros])/100),2),
+        round(max(z1z2BandZeroDtNoNA_M[,Zeros])-
+                (max(yz1BandZeroDtNoNA_M[,Zeros])/100),2))) +
+        theme_bw()+
+        labs(title="Percentage of Zeros by Bandwidth", y= "Z2", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+
+z1z2PlotMeanBandDtAbsDiff<-ggplot(z1z2bandDtAbsDiff, aes(x = z1, y = z2, fill = Mean)) +
+        geom_tile() +
+        scale_fill_gradient(low="dodgerblue3", high="red",
+                           breaks = c(8.14e-15,3.54e-14))+
+        theme_bw()+
+        labs(title="Tile plot of Mean Absolute Difference", y= "Z2", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+z1z2PlotMaxBandDtAbsDiff<-ggplot(z1z2bandDtAbsDiff, aes(x = z1, y = z2, fill = Max)) +
+        geom_tile() +
+        scale_fill_gradient(low="red3", high="firebrick4", 
+                           breaks = c(3.56e-13,5.22e-12)) +
+        theme_bw()+
+        labs(title="Tile plot of Max Absolute Difference", y= "Z1", x="Z2") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+z1z2PlotMeanBandDtRelDiff<-ggplot(bandDtRelDiff, aes(x = z1, y = z2, fill = Mean)) +
+        geom_tile() +
+        scale_fill_gradient(low="darkgreen", high="olivedrab3", 
+                           breaks = c(1.51e-13,1.43e-11)) +
+        theme_bw()+
+        labs(title="Tile plot of Mean Relative Difference", y= "Z1", x="Z2") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+
+z1z2PlotMaxBandDtRelDiff<-ggplot(bandDtRelDiff, aes(x = z1, y = z2, fill = Max)) +
+        
+        geom_tile() +
+        scale_fill_gradient(low="olivedrab2", high="gold1", 
+                           breaks = c(1.66e-11, 1.08e-07)) +
+        theme_bw()+
+        labs(title="Tile plot of Max Relative Difference", y= "Z1", x="Z2") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+z1z2plotBandmismDt <-ggplot(z1z2BandmismDt, aes(x = z1, y = z2, fill = Mismatches)) +
+        geom_tile() +
+        scale_fill_gradient(low="ghostwhite", high="red" , 
+                            breaks = c(0.00, 0.13)) +
+        theme_bw()+
+        labs(title="Percentage of Mismatches by Bandwidth", y= "Z2", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+```
+
+
+Given that the bandwidths are three dimensional, the analysis takes into account all the possible two-dimensional interactions among the variables one at time. To remove the third dimension from the graphical representations, Mean, Minimum and Maximum values have been considered with analogous results. Here are reported the results obtained using Maximum values with respect to the omitted dimension. Furthermore, given that the behaviour of Maximum Absolute and Maximum Relative differences closely resembles the one of their Mean counterpart, only the latter is displayed. 
+
+ 
+In the first plot, it can be noted that the Mean Absolute Difference decreases the higher the coefficient of both $Y$ and $Z1$, altough the impact of the latter is milder; the range of the Mean Absolute Difference is $10^{-16} - 10^{-14}$ . The second plot, the one of Mean Relative Difference, show an almost homogeneous distribution and its values range in the interval $10^{-13} - 10^{-11}$.
+The relative percentage of Zero valued LSCVEs tend to decrease the higher it is the coefficient of $Z$ while it seems to be not affected by the coefficient of $Y$; hence, the number of the observations for the Relative difference increases with the $Z1$ coefficient. Nevertheless, the latter effect is almost negligible since the maximum value of the percentage of Zero is just $0.46$%. Finally, the tileplot of Mismatches shows an increasing gradient in $Y$ and a slightly decreasing one in $Z1$. Notably, a remarkable part of the Mismatches affects the bandwidths with maximal coefficient in $Y$. However, the magnitude of these mismatches is low and the maximum one is $0.13$%.
+
+
+
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.3, fig.width=10.5}
+
+grid.arrange(yz1PlotMeanBandDtAbsDiff, yz1PlotMeanBandDtRelDiff, ncol=2)
+
+```
+
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.3, fig.width=10.5}
+
+grid.arrange(yz1PlotBandZeroDtNoNA_M , yz1plotBandmismDt, ncol=2)
+
+```
+
+The tileplot of Mean Absolute Difference shows a stronger decreasing gradient in $Y$ while a milder decreasing one can be noticed with respect to $Z1$. Mean Relative Difference are homogeneously distributed with respect to bandwidth and are in the order of $10^{-13} - 10^{-11}$ ($10^{-16} - 10^{-14}$ for the Mean Absolute). The third plot shows a marked decreasing gradient in $Z2$ while $Y$ seems to have no effect. However, the relative percentage of Zeros is never higher than $0.46$%, so the representativity of Relative Differences measures holds. Finally, the Mismatch tileplot shows a decreasing gradient with respect to $Z2$ while an higher Percentage of Mismatches occurs for high values of the bandwidth of $Y$. 
+
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.3, fig.width=10.5}
+
+grid.arrange(yz2PlotMeanBandDtAbsDiff, yz2PlotMeanBandDtRelDiff, ncol=2)
+
+```
+
+
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.3, fig.width=10.5}
+
+grid.arrange(yz2PlotBandZeroDtNoNA_M , yz2plotBandmismDt, ncol=2)
+
+```
+
+The tileplot of Mean Absolute Difference relative to $Z1$, $Z2$ displays  a decreasing gradient in both dimensions and the size of the difference seems to be particularly affected by the minimum of the two values. Again, Relative Differences are homogeneously distributed with respect to the bandwidths and have analogous ranges of variation with respect to the previous cases. The percentage of Zeros decreases in both $Z$ coefficients while the percentage of Mismatches has a negative gradient in both the dimensions.
+
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.3, fig.width=10.5}
+
+grid.arrange(z1z2PlotMeanBandDtAbsDiff, z1z2PlotMeanBandDtRelDiff, ncol=2)
+
+```
+
+
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.3, fig.width=10.5}
+
+
+grid.arrange(z1z2PlotBandZeroDtNoNA_M , z1z2plotBandmismDt, ncol=2)
+
+```
+
+
+###Assessment of mismatches in bandwidth ranking
+In this section it is provided an assessment of the mismatches between the rankings of bandwidths induced by the two functions.
+To assess the similarity of the rankings, Pearson's correlation coefficient, Spearmans' correlation coefficient, Kendall's rank correlation coefficient and Dot Product (numerator of Cosine Similarity) are provided. 
+Pearson's correlation coefficient is a measure of linear dependance of two variables, while Spearman's correlation coefficient measures the extent to which both variables can be described by monotonic function. Kendall coefficient is increasing in the relative number of concordant pairs among the vectors and decreasing in the discordant ones.
+Finally, cosine similarity is a geometrical distance of the two vectors in the n-dimensional Euclidean space. It measures the angle between the two vectors when both have the origin as initial point and can be shown to be equivalent to Pearson's correlation coefficient for centered data.
+In the following, the above-mentioned coefficients will be referred to as CRS (Coefficients of Rank-Similarity).
+In case of mismatches between the rankings induced by the two functions, further checks are performed. 
+
+```{r, echo=FALSE, results='hide', warning=FALSE, }
+
+
+#############################
+## Minimum mean LSCVE error ##
+#############################
+
+##################################
+##     Code Moved for plot      ##
+##################################
+#absNoNA_M<-lapply(noNA_M, abs)
+#absNoNA_R<-lapply(noNA_R, abs)
+###################################
+meanAbsNoNA_M<-lapply(absNoNA_M, colMeans)
+meanAbsNoNA_R<-lapply(absNoNA_R, colMeans)
+rankMeanAbsNoNA_M<-lapply(meanAbsNoNA_R, rank)
+rankMeanAbsNoNA_R<-lapply(meanAbsNoNA_R, rank)
+
+pMean<-sapply(1:length(rankMeanAbsNoNA_M), function(d){
+        cor.test(rankMeanAbsNoNA_M[[d]],rankMeanAbsNoNA_R[[d]],
+                method="pearson")[4]
+},simplify=FALSE,USE.NAMES=FALSE)
+
+sumPMean<-sum(unlist(lapply(pMean,function(d){d[1]})))
+
+sMean<-sapply(1:length(rankMeanAbsNoNA_M), function(d){
+        cor.test(rankMeanAbsNoNA_M[[d]],rankMeanAbsNoNA_R[[d]],
+                method="spearman")[4]
+},simplify=FALSE,USE.NAMES=FALSE)
+
+sumSMean<-sum(unlist(lapply(sMean,function(d){d[1]})))
+
+kMean<-sapply(1:length(rankMeanAbsNoNA_M), function(d){
+        cor.test(rankMeanAbsNoNA_M[[d]],rankMeanAbsNoNA_R[[d]],
+                method="kendall")[4]
+},simplify=FALSE,USE.NAMES=FALSE)
+
+sumKMean<-sum(unlist(lapply(kMean,function(d){d[1]})))
+
+csMean<-sapply(1:length(rankMeanAbsNoNA_M), function(d){
+                csi(rankMeanAbsNoNA_M[[d]],rankMeanAbsNoNA_R[[d]])
+},simplify=FALSE,USE.NAMES=FALSE)
+
+sumCSMean<-sum(unlist(lapply(csMean,function(d){d[1]})))
+
+
+##############################################
+## Minimum LSCVE error for every observation ##
+##############################################
+
+#computing rank of the elements of every row 
+#ith column stores the ranks of the ith row
+
+rankObsNoNA_M<- lapply(absNoNA_M,function(d){
+        apply(d,1,rank,ties.method= "first")})
+
+rankObsNoNA_R<- lapply(absNoNA_R,function(d){
+        apply(d,1,rank,ties.method= "first")})
+
+pObs<-sapply(1:length(rankObsNoNA_M), function(d){
+        sapply(1:ncol(rankObsNoNA_M[[d]]), function(g){
+                cor.test(rankObsNoNA_M[[d]][, g],rankObsNoNA_R[[d]][, g],
+                         method="pearson")[4]
+        },USE.NAMES=FALSE)
+}, simplify=FALSE,USE.NAMES=FALSE)
+
+sumPObs<-sum(unlist(lapply(pObs,function(d){sum(unlist(d))})))
+
+sObs<-sapply(1:length(rankObsNoNA_M), function(d){
+        sapply(1:ncol(rankObsNoNA_M[[d]]), function(g){
+                cor.test(rankObsNoNA_M[[d]][, g],rankObsNoNA_R[[d]][, g],
+                         method="spearman")[4]
+        },USE.NAMES=FALSE)
+}, simplify=FALSE,USE.NAMES=FALSE)
+
+sumSObs<-sum(unlist(lapply(sObs,function(d){sum(unlist(d))})))
+
+kObs<-sapply(1:length(rankObsNoNA_M), function(d){
+        sapply(1:ncol(rankObsNoNA_M[[d]]), function(g){
+                cor.test(rankObsNoNA_M[[d]][, g],rankObsNoNA_R[[d]][, g],
+                        method="kendall")[4]
+        },USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+sumKObs<-sum(unlist(lapply(kObs,function(d){sum(unlist(d))})))
+
+csObs<-sapply(1:length(rankObsNoNA_M), function(d){
+        sapply(1:ncol(rankObsNoNA_M[[d]]), function(g){
+                csi(rankObsNoNA_M[[d]][, g],rankObsNoNA_R[[d]][, g])[1]
+        },USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+sumCSObs<-sum(unlist(lapply(csObs,function(d){sum(unlist(d))})))
+
+#########################
+## Mismatch assessment ##
+#########################
+
+#Positions of rankings where a mismatch arise
+posMismObs<-lapply(
+        sapply(1:length(absNoNA_M), function(d){
+                sapply(1:nrow(absNoNA_M[[d]]), function(g){
+        (sum((rank(absNoNA_M[[d]][g, ],ties.method= "first") !=
+                    rank(absNoNA_R[[d]][g, ],ties.method= "first"))))>0
+                },USE.NAMES=FALSE)
+        },simplify=FALSE,USE.NAMES=FALSE)
+, which)
+
+#rates of mismatches
+rateMismObs<-length(unlist(posMismObs))/10000
+
+
+##################################
+##     Code Moved for plot      ##
+##################################
+
+#Cases s.t. mismatch affect the best bandwidth
+#mismUneffObs<-sapply(1:length(absNoNA_M), function(d){
+#                sapply(1:nrow(absNoNA_M[[d]]), function(g){
+#                        which.min(absNoNA_M[[d]][g, ]) !=
+#                        which.min(absNoNA_R[[d]][g, ])
+#                },USE.NAMES=FALSE)
+#},simplify=FALSE,USE.NAMES=FALSE
+#)
+
+
+#rate of mismatches affecting the best bandwidth
+rateMismBestObs<-sum(unlist(mismUneffObs))/10000
+#rate of relevant mismatches over total mismatches
+rateMismBestTotObs<-rateMismBestObs/rateMismObs
+
+#Minimum LSCVE for every observation
+minimumLSCVeObs<-
+        sapply(1:length(absNoNA_M), function(d){
+                sapply(1:nrow(absNoNA_M[[d]]), function(g){
+                        min(absNoNA_M[[d]][g, ])
+                },USE.NAMES=FALSE)
+        },simplify=FALSE,USE.NAMES=FALSE)
+
+#Sum of LSCVE for every observation in every sample
+sumMinimumLSCVeObs<-sum(unlist(minimumLSCVeObs))
+
+#Creates a specific dataset containing the LSCVE from M function in cases
+#of mismatch 
+mismObsM<-sapply(1:length(posMismObs), function(d){
+        sapply(1:length(posMismObs[[d]]) , function(g){
+        noNA_M[[d]][posMismObs[[d]][g],]
+        },USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+#Creates a specific dataset containing the LSCVE from R function in cases
+#of mismatch 
+mismObsR<-sapply(1:length(posMismObs), function(d){
+        sapply(1:length(posMismObs[[d]]) , function(g){
+                noNA_R[[d]][posMismObs[[d]][g],]
+        },USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+#Index of the bandwidth with lowest LSCVE in case of mismatch
+#(according to M function)
+bestMismObsM<-sapply(1:length(mismObsM), function(d){
+        apply(mismObsM[[d]],2,which.min)
+})
+
+#Index of the bandwidth with lowest LSCVE in case of mismatch
+#(according to R function)
+bestMismObsR<-sapply(1:length(mismObsR), function(d){
+        apply(mismObsR[[d]],2,which.min)
+})
+            
+#Bandwidth with lowest LSCVE in case of mismatch (according to M function)
+bestLSCVeObsM<-sapply(1:length(posMismObs), function(d){
+        sapply(1:length(posMismObs[[d]]) , function(g){
+                absNoNA_M[[d]][posMismObs[[d]][g],bestMismObsM[[d]][g]]
+        },USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+#Bandwidth with lowest LSCVE in case of mismatch (according to R function)
+bestLSCVeObsR<-sapply(1:length(posMismObs), function(d){
+        sapply(1:length(posMismObs[[d]]) , function(g){
+                absNoNA_R[[d]][posMismObs[[d]][g],bestMismObsR[[d]][g]]
+        },USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+#Differences between the minimum LSCVE from the two functions
+diffLSCVeObs<-sapply(1:length(bestLSCVeObsR), function(d){
+        abs(bestLSCVeObsM[[d]]-bestLSCVeObsR[[d]])
+},simplify=FALSE,USE.NAMES=FALSE)
+
+#Sum of differences between the minimum LSCVE from the two functions
+sumDiffLSCVeObs<-sum(unlist(diffLSCVeObs))
+
+#Relative impact of the sum o differences between the minimum LSCVE from the two function over sum of LSCVE for every observation in every sample
+impactMismOnLSCVe<-sumDiffLSCVeObs/sumMinimumLSCVeObs
+```
+
+The rankings follow two criteria: the minimum mean LSCVE error across observations and the minimum LSCVE for every observation.
+The minimum mean LSCVE criterion ranks the bandwidths of a given sample based on the mean error across observations. First, mean LSCVE are computed for every bandwidth in every sample and, second, for every sample the bandwidth are ranked in ascending order from the one with minimum mean-LSCVE.
+Third, CRS of the rankings induced by the two functions are evaluated for every sample to measure the magnitude of the mismatches. Finally, the mean of the CRS across all the samples is produced
+
+```{r, results="asis", echo=FALSE}
+coefMean=data.frame(t(c(sumPMean, sumSMean, sumKMean, sumCSMean)/100))
+names(coefMean)<-c("Pearson", "Spearman", "Kendall", "Dot Prod." )
+pandoc.table(coefMean,style="rmarkdown", split.tables=999, caption="Mean CRS across all observation in every sample", split.cells = rep(1,4), digits = c(5,5,5,5))
+```
+
+The table above shows that the two functions generate identical rankings when the minimum mean LSCVE criterion is adopted.
+Conversely, when rankings of the bandwidths are computed observation-wise, some mismatches arise. Following the latter criterion, bandwidths are ranked in ascending order starting from the one entailing the lowest LSCVE on the single observation. To provide a measure of the entity of the mismatches, the mean of the CRS across every observation is reported.
+
+```{r, results="asis", echo=FALSE}
+coefObs=data.frame(t(c(sumPObs, sumSObs, sumKObs, sumCSObs)/10000))
+names(coefObs)<-c("Pearson", "Spearman", "Kendall", "Dot Prod." )
+pandoc.table(coefObs,style="simple", split.tables=999, caption="Mean CRS of every observation", split.cells = rep(1,4), digits = c(6,6,6,6))
+```
+
+The relative percentage of mismatch is $`r rateMismObs*100`$% while the mismatches affecting the best bandwidth (the one with lowest LSCVE) are the $`r round(rateMismBestObs,3)`$% with an impact of the latter on the former of $`r round(rateMismBestTotObs,3) `$%.
+To measure the impact of mismatches, the sum of absolute differences between the set of minimum-LSCVE bandwidths determined by the two functions is computed:$`r sumDiffLSCVeObs`$. In percentage terms, the impact of the latter variable on the total error of the minimum-LSCVE bandwidths set (computed using the `MATLAB` function ) is $`r impactMismOnLSCVe*100`$%. Thus, the difference in the LSCVE incurred when using `Ker_LSCV_OUT.R` instead of `Ker_LSCV_OUT.m` is negligible when considering data from the Separable DGP.
+\pagebreak
+
+---
+
+##Accuracy Assessment, Non-Separable DGP 
+
+---
+
+```{r, echo=FALSE, results='hide', warning=FALSE, }
+setwd("C:/ban/n/ce_multi_ext_final")
+
+r=100
+NamesCVexp_M<-sapply(1:r, function(d){paste0("CV_ce_exp_M_", d,".csv")})
+NamesCVexp_R<-sapply(1:r, function(d){paste0("CV_ce_exp_R_", d,".csv")})
+CVexp_M<-lapply(NamesCVexp_M, function(d){
+        read.table(d, header=FALSE, as.is=TRUE, colClasses= rep("numeric",9) )})
+CVexp_R<-lapply(NamesCVexp_R, function(d){
+        read.table(d, header=FALSE, as.is=TRUE, colClasses= rep("numeric",9))})
+#checking if there are discrepancies in CV identified as NA
+diffNAexp<-sum(sapply(1:r, function(d){
+        sum(is.na(CVexp_M[[d]])!=is.na(CVexp_R[[d]]))}))
+#NA handling
+nNAexp_M<-sum(sapply(1:r, function(d){
+        (is.na(CVexp_M[[d]]))}))
+nNAexp_R<-sum(sapply(1:r, function(d){
+        (is.na(CVexp_R[[d]]))}))
+equlnNA<-nNAexp_M==nNAexp_R
+nNAexp<-nNAexp_R
+#Since there are no NA there is no need for NA handling. Nevertheless,
+#the dataset is renamed to display the absence of NAs
+noNAexp_M<-CVexp_M
+noNAexp_R<-CVexp_R
+#number of zero-valued CVs
+nZeroexp<-sum(unlist(sapply(noNAexp_M, function(d){d==0})))
+#checking if there are discrepancies in CV when CV=0 
+diffZeroexp<-sum(sum(sapply(1:length(noNAexp_M), function(d){
+        sum((noNAexp_M[[d]]==0)!=(noNAexp_R[[d]]==0))})))
+#Checking magnitude of differences for no-NA values
+absDiffexp<-lapply(1:length(noNAexp_M), function(d){
+        abs(noNAexp_M[[d]]-noNAexp_R[[d]])})
+
+#number of occourrences of a difference in the CVs from the two functions
+#lower than 15 digits
+nNoDiffexp<-sum(unlist(lapply(absDiffexp, function(d){d==0}))) 
+
+#max of relative error for every band in every repetition
+absMaxexpBand<-lapply(absDiffexp,function(d){
+                                apply(d, 2, function(g){
+                                        max(g[complete.cases(g)],na.rm=TRUE)
+                                                        }
+                                        )}
+                        )
+
+#max of absolute error for every band across all the repetitions
+absMaxexpBandRep<-lapply(
+                        sapply(1:length(absMaxexpBand[[1]]),function(d){
+                                sapply(1:(length(absMaxexpBand)),function(g){
+                                        absMaxexpBand[[g]][d]      
+                                }, USE.NAMES=FALSE)
+                        },simplify=FALSE,USE.NAMES=FALSE),
+                max)
+
+#max of absolute error for every observation in every repetition
+absMaxexpObs<-lapply(absDiffexp,function(d){
+                        apply(d, 1, function(g){
+                                max(g[complete.cases(g)],na.rm=TRUE)
+                        })
+                })
+
+#max of absolute error across the whole sample
+absmaxexpWhole<-max(unlist(absDiffexp), na.rm=TRUE)
+
+relDiffexp<-sapply(1:length(noNAexp_M),function(d){
+                sapply(1:(nrow(noNAexp_M[[d]])),function(i){
+                        sapply(1:(length(noNAexp_M[[d]][i,])),function(j){
+100*abs((noNAexp_M[[d]][i,j]-noNAexp_R[[d]][i,j])/noNAexp_M[[d]][i,j])
+                        }, USE.NAMES=FALSE)
+                }, USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+relDiffexp<-lapply(relDiffexp,t)
+
+#max of relative error for every band in every repetition
+relMaxexpBand<-lapply(relDiffexp,function(d){
+                        apply(d, 2, function(g){
+                                max(g[complete.cases(g)],na.rm=TRUE)
+                        })
+                })
+
+#max of relative error for every band across all the repetitions
+relMaxexpBandRep<-lapply(
+                        sapply(1:length(relMaxexpBand[[1]]),function(d){
+                                sapply(1:(length(relMaxexpBand)),function(g){
+                                        relMaxexpBand[[g]][d]      
+                                }, USE.NAMES=FALSE)
+                        },simplify=FALSE,USE.NAMES=FALSE),
+                max)
+
+#max of relative error for every observation in every repetition
+relMaxexpObs<-lapply(relDiffexp,function(d){
+                        apply(d, 1, function(g){
+                                max(g[complete.cases(g)],na.rm=TRUE)
+                        })
+                })
+#max of relative error across the whole sample
+relmaxexpWhole<-max(unlist(relDiffexp), na.rm=TRUE)
+```
+
+The Non-Separable dataset consists of $`r r`$ repetitions of a sample of $`r unique(lapply(CVexp_M, nrow))`$ observations and $`r unique(lapply(CVexp_M, ncol))`$ bandwidths for a total of 729 $\times$ 100 $\times$ 100 = `r length(unlist(noNAexp_M)) ` observations.
+The two routines compute a zero LSCVE value in the exact same points for a total of $`r nZeroexp`$ occurrences (the `r round((nZeroexp/length(unlist(noNAexp_M)))*100,2) ` % of cases). Furthermore, the number of NAs is $`r diffNAexp`$.
+The LSCVEs computed by the two functions show a difference lower than 15th digit for $`r nNoDiffexp`$ observations (the `r round((nNoDiffexp/length(unlist(noNAexp_M)))*100,2)` % of cases). The Maximum Absolute Difference has a magnitude of $`r absmaxexpWhole`$, while the Maximum Relative Difference is $`r relmaxexpWhole`$.
+Density plots of the Absolute and Relative Differences between LSCVEs computed with the `MATLAB` and `R` functions are displayed below.
+
+```{r, echo=FALSE, results='hide', }
+#converting data to data.frame format for ggplot
+bands=729
+dfAbsDiffexp<-data.frame(
+        abs=unlist(absDiffexp), Bandwidth=as.vector(rep(
+                                mapply(rep,1:bands, rep(100,bands)),
+                                length(absDiffexp)))
+        )
+
+lRelexp<-lapply(relDiffexp, function(d){
+                sapply(1:length(d), function(g){
+                length(d[[g]])
+                })
+        })
+
+dfRelDiffexp<-data.frame(
+        rel=unlist(relDiffexp), Bandwidth=unlist(rep(
+                                lapply(lRelexp, function(d){
+                                        mapply(rep,1:bands,d)
+                                })))
+                        )
+```
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.5, }
+
+###Plotting Densities###
+absGraphexp <- 
+        ggplot(dfAbsDiffexp, aes(x = abs)) +
+        geom_density(aes(group = Bandwidth, colour = Bandwidth, fill=Bandwidth), alpha=.1) +
+        labs(title="Density plot of Absolute Difference", y="PDF") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+        panel.grid=element_blank(),
+        axis.text=element_text(size=rel(1.3)),
+        axis.title=element_text(size=rel(1.5)),
+        axis.ticks.length = unit(.3, "cm"),
+        legend.key.size = unit(0.5, "cm"),
+        legend.text = element_text(size = 15)) +
+        scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+        labels = trans_format("log10", math_format(10^.x)),
+        "Absolute Difference",
+        limits = (c(5e-22, 5e-8))) 
+relGraphexp <- ggplot(dfRelDiffexp, aes(x = rel)) +
+        geom_density(aes(group = Bandwidth, colour = Bandwidth, fill = Bandwidth), alpha=.2) +
+        labs(title="Density plot of Relative Difference", y="PDF") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+        panel.grid=element_blank(),
+        axis.text=element_text(size=rel(1.3)), 
+        axis.title=element_text(size=rel(1.5)),
+        axis.ticks.length = unit(.3, "cm"),
+        legend.key.size = unit(0.5, "cm"),
+        legend.text = element_text(size = 15))+
+        scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+        labels = trans_format("log10", math_format(10^.x)),
+        "Relative Difference",
+        limits = c(1e-15, 5e-11)) +
+        scale_fill_gradient(low="darkgreen", high="aquamarine" ) +
+        scale_colour_gradient(low="darkgreen", high="aquamarine" )
+grid.arrange(absGraphexp, relGraphexp, nrow=2)
+```
+
+As it can be seen from the graph, the Absolute Difference varies in a range of $10^{-21}$ - $10^{-8}$ while Relative Difference varies in the range $10^{-15}$ - $10^{-11}$. What has been noted in the Separable case holds in the Non-Separable one: even if the Absolute Difference shows some variations with respect to the bandwidth used to compute the LSCVE, the normalization with respect to the LSCVE almost removes this source of variability. 
+Moreover, also in this case the differences between the LSCVE computed by the two routines are extremely small both in absolute and in relative terms and their relative impact on the LSCVE tends to be stable across the different bandwidths.   
+Closely following the Separable outline, some tile plots are reported to provide more information regarding the role of the bandwidths in the differences between the LSCVEs computed by the two scripts.
+
+```{r, echo=FALSE, results='hide', warning=FALSE }
+
+###Plotting zeros, heatmap and medium absolute error by bandwidth###
+
+#Preparing data for Zeros Tileplots 
+
+dfNoNAexp_M<-data.frame(
+        abs=unlist(noNAexp_M), Bandwidth=as.vector(rep(
+                                mapply(rep,1:bands, rep(100,bands)),
+                                length(noNAexp_M)))
+        )
+
+zeroDfNoNAexp_M<-dfNoNAexp_M[dfNoNAexp_M[, 1]==0, ]
+zeroDtNoNAexp_M<-data.table(zeroDfNoNAexp_M)
+BandZeroDtNoNAexp_M<-zeroDtNoNAexp_M[,.N,by=Bandwidth]
+BandZeroDtNoNAexp_M[, N := (N/10000)]
+setkey(BandZeroDtNoNAexp_M, Bandwidth)
+BandZeroDtNoNAexp_M <- BandZeroDtNoNAexp_M[dtHPerm]
+setnames(BandZeroDtNoNAexp_M,c("Bandwidth","Zeros", "y", "z1", "z2"))
+yz1BandZeroDtNoNAexp_M <- BandZeroDtNoNAexp_M[ ,.(Zeros=max(Zeros)),by=.(y,z1)]
+yz2BandZeroDtNoNAexp_M <- BandZeroDtNoNAexp_M[ ,.(Zeros=max(Zeros)),by=.(y,z2)]
+z1z2BandZeroDtNoNAexp_M <- BandZeroDtNoNAexp_M[ ,.(Zeros=max(Zeros)),by=.(z1,z2)]
+        
+      
+#Preparing Data for Absolute Difference Tileplots 
+dtAbsDiffexp<-data.table(dfAbsDiffexp)
+dtAbsDiffexp<-dtAbsDiffexp[,.(Mean = mean(abs), Max = max(abs)), by=Bandwidth]
+setkey(dtAbsDiffexp, Bandwidth)
+bandDtAbsDiffexp<-dtAbsDiffexp[dtHPerm]
+setnames(bandDtAbsDiffexp,c("Bandwidth", "Mean", "Max", "y", "z1", "z2"))
+yz1bandDtAbsDiffexp <- bandDtAbsDiffexp[ ,.(Mean=max(Mean), Max=max(Max)),by=.(y,z1)]
+yz2bandDtAbsDiffexp <- bandDtAbsDiffexp[ ,.(Mean=max(Mean), Max=max(Max)),by=.(y,z2)]
+z1z2bandDtAbsDiffexp <- bandDtAbsDiffexp[ ,.(Mean=max(Mean), Max=max(Max)),by=.(z1,z2)]
+
+
+#Preparing Data for Relative Difference Tileplots 
+
+lRelexp<-lapply(relDiffexp, function(d){
+                sapply(1:length(d), function(g){
+                length(d[[g]])
+                })
+        })
+
+dfRelDiffexp<-data.frame(
+        rel=unlist(relDiffexp), Bandwidth=unlist(rep(
+                                lapply(lRelexp, function(d){
+                                        mapply(rep,1:bands,d)
+                                })))
+                        )
+
+dtRelDiffexp<-data.table(dfRelDiffexp)
+dtRelDiffexp<-dtRelDiffexp[,.(Mean = mean(rel, na.rm=TRUE), Max = max(rel[complete.cases(rel)])), by=Bandwidth]
+setkey(dtRelDiffexp, Bandwidth)
+bandDtRelDiffexp<-dtRelDiffexp[dtHPerm]
+setnames(bandDtRelDiffexp,c("Bandwidth", "Mean", "Max", "y", "z1", "z2"))
+yz1bandDtRelDiffexp <- bandDtRelDiffexp[ ,.(Mean=max(Mean), Max=max(Max)),by=.(y,z1)]
+yz2bandDtRelDiffexp <- bandDtRelDiffexp[ ,.(Mean=max(Mean), Max=max(Max)),by=.(y,z2)]
+z1z2bandDtRelDiffexp <- bandDtRelDiffexp[ ,.(Mean=max(Mean), Max=max(Max)),by=.(z1,z2)]
+
+#Preparing Data for Mismatches Tileplots
+
+##################################
+##     Code Moved for plot      ##
+##################################
+absNoNAexp_M<-lapply(noNAexp_M, abs)
+absNoNAexp_R<-lapply(noNAexp_R, abs)
+
+#Cases s.t. mismatch affect the best bandwidth
+mismUneffObsexp<-sapply(1:length(absNoNAexp_M), function(d){
+                sapply(1:nrow(absNoNAexp_M[[d]]), function(g){
+                        which.min(absNoNAexp_M[[d]][g, ]) !=
+                        which.min(absNoNAexp_R[[d]][g, ])
+                },USE.NAMES=FALSE)
+        },simplify=FALSE,USE.NAMES=FALSE
+)
+
+mism<-lapply(mismUneffObsexp, function(d){names(d[d==TRUE])})
+mismDt<-data.table(Mismatches=table(unlist(mism)),
+                       Bandwidth=as.numeric(
+                               gsub("V", "", names(table(unlist(mism))))))
+#Adding the Bandwidth without relevant mismatches 
+mismDt<-data.table(Bandwidth=c(mismDt[, Bandwidth],which(!(c(1:bands) %in% mismDt[, Bandwidth]))), Mismatches=c(mismDt[, Mismatches],rep(0,bands-(length(mismDt[, Mismatches])))) )
+mismDt<-mismDt[order(rank(Bandwidth))]
+setkey(mismDt, Bandwidth)
+#Merging for univariate bandwidth values
+BandmismDt<-mismDt[dtHPerm]
+setnames(BandmismDt, c("Bandwidth", "Mismatches", "y", "z1", "z2"))
+yz1BandmismDt <- BandmismDt[ ,.(Mismatches=max(Mismatches)/100),by=.(y,z1)]
+yz2BandmismDt <- BandmismDt[ ,.(Mismatches=max(Mismatches)/100),by=.(y,z2)]
+z1z2BandmismDt <- BandmismDt[ ,.(Mismatches=max(Mismatches)/100),by=.(z1,z2)]
+
+# Y Z1 Plots
+
+yz1PlotBandZeroDtNoNAexp_M <-ggplot(yz1BandZeroDtNoNAexp_M, aes(x = z1, y = y, fill = Zeros)) +
+        geom_tile() +
+        scale_fill_gradient(low="ghostwhite", high="black" , 
+                            breaks = c(0.28,0.46)) +
+        theme_bw()+
+        labs(title="Percentage of Zeros by Bandwidth", y= "Y", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+
+yz1PlotMeanBandDtAbsDiffexp<-ggplot(yz1bandDtAbsDiffexp, aes(x = z1, y = y, fill = Mean)) +
+        geom_tile() +
+        scale_fill_gradient(low="dodgerblue3", high="red",
+                            breaks = c(1.29e-12, 1.56e-09)) +
+        theme_bw()+
+        labs(title="Tile plot of Mean Absolute Difference", y= "Y", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+yz1PlotMaxBandDtAbsDiffexp<-ggplot(yz1bandDtAbsDiffexp, aes(x = z1, y = y, fill = Max)) +
+        geom_tile() +
+        scale_fill_gradient(low="red3", high="firebrick4",
+                            breaks = c(5.53e-10, 8.34e-07)) +
+        theme_bw()+
+        labs(title="Tile plot of Max Absolute Difference", y= "Y", x="Z1") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+yz1PlotMeanBandDtRelDiffexp<-ggplot(bandDtRelDiffexp, aes(x = z1, y = y, fill = Mean)) +
+        geom_tile() +
+        scale_fill_gradient(low="darkgreen", high="olivedrab3",
+                            breaks = c(1.45e-13, 2.71e-11)) +
+        theme_bw()+
+        labs(title="Tile plot of Mean Relative Difference", y= "Y", x="Z1") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+
+yz1PlotMaxBandDtRelDiffexp<-ggplot(bandDtRelDiffexp, aes(x = z1, y = y , fill = Max)) +
+                geom_tile() +
+        scale_fill_gradient(low="olivedrab2", high="gold1",
+                            breaks = c(1.1e-11, 2.05e-07)) +
+        theme_bw()+
+        labs(title="Tile plot of Max Relative Difference", y= "Y", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+yz1plotBandmismDt <-ggplot(yz1BandmismDt, aes(x = z1, y = y, fill = Mismatches)) +
+        geom_tile() +
+        scale_fill_gradient(low="ghostwhite", high="red" , 
+                            breaks = c(0.00, 0.14)) +
+        theme_bw()+
+        labs(title="Percentage of Mismatches by Bandwidth", y= "Y", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+# Y Z2 Plots
+
+yz2PlotBandZeroDtNoNAexp_M <-ggplot(yz2BandZeroDtNoNAexp_M, aes(x = z2, y = y, fill = Zeros)) +
+        geom_tile() +
+        scale_fill_gradient(low="ghostwhite", high="black" , 
+                            breaks = c(
+        round(min(yz2BandZeroDtNoNAexp_M[,Zeros])+
+                (min(yz2BandZeroDtNoNAexp_M[,Zeros])/100),2),
+        round(max(yz2BandZeroDtNoNAexp_M[,Zeros])-
+                (max(yz2BandZeroDtNoNAexp_M[,Zeros])/100),2))) +
+        theme_bw()+
+        labs(title="Percentage of Zeros by Bandwidth", y= "Y", x="Z2") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+
+yz2PlotMeanBandDtAbsDiffexp<-ggplot(yz2bandDtAbsDiffexp, aes(x = z2, y = y, fill = Mean)) +
+        geom_tile() +
+        scale_fill_gradient(low="dodgerblue3", high="red",
+                            breaks = c(1.17e-12, 1.56e-09)) +
+        theme_bw()+
+        labs(title="Tile plot of Mean Absolute Difference", y= "Y", x="Z2") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+yz2PlotMaxBandDtAbsDiffexp<-ggplot(yz2bandDtAbsDiffexp, aes(x = z2, y = y, fill = Max)) +
+        geom_tile() +
+        scale_fill_gradient(low="red3", high="firebrick4", 
+                           breaks = c(5.53e-10, 8.34e-07)) +
+        theme_bw()+
+        labs(title="Tile plot of Max Absolute Difference", y= "Y", x="Z2") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+yz2PlotMeanBandDtRelDiffexp<-ggplot(bandDtRelDiffexp, aes(x = z2, y = y , fill = Mean)) +
+        geom_tile() +
+        scale_fill_gradient(low="darkgreen", high="olivedrab3", 
+                           breaks = c(1.45e-13, 2.71e-11)) +
+        theme_bw()+
+        labs(title="Tile plot of Mean Relative Difference", y= "Y", x="Z2") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+
+yz2PlotMaxBandDtRelDiffexp<-ggplot(bandDtRelDiffexp, aes(x = z2, y = y , fill = Max)) +
+        
+        geom_tile() +
+        scale_fill_gradient(low="olivedrab2", high="gold1", 
+                           breaks = c(1.1e-11, 2.05e-07)) +
+        theme_bw()+
+        labs(title="Tile plot of Max Relative Difference", y= "Y", x="Z2") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+yz2plotBandmismDt <-ggplot(yz2BandmismDt, aes(x = z2, y = y, fill = Mismatches)) +
+        geom_tile() +
+        scale_fill_gradient(low="ghostwhite", high="red" , 
+                            breaks = c(0.00, 0.14)) +
+        theme_bw()+
+        labs(title="Percentage of Mismatches by Bandwidth", y= "Y", x="Z2") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+# Z1 Z2 Plots
+
+z1z2PlotBandZeroDtNoNAexp_M <-ggplot(z1z2BandZeroDtNoNAexp_M, aes(x = z1, y = z2, fill = Zeros)) +
+        geom_tile() +
+        scale_fill_gradient(low="ghostwhite", high="black" , 
+                            breaks = c(
+        round(min(z1z2BandZeroDtNoNAexp_M[,Zeros])+
+                (min(yz1BandZeroDtNoNAexp_M[,Zeros])/100),2),
+        round(max(z1z2BandZeroDtNoNAexp_M[,Zeros])-
+                (max(yz1BandZeroDtNoNAexp_M[,Zeros])/100),2))) +
+        theme_bw()+
+        labs(title="Percentage of Zeros by Bandwidth", y= "Z2", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+
+z1z2PlotMeanBandDtAbsDiffexp<-ggplot(z1z2bandDtAbsDiffexp, aes(x = z1, y = z2, fill = Mean)) +
+        geom_tile() +
+        scale_fill_gradient(low="dodgerblue3", high="red",
+                           breaks = c(2.66e-10, 1.56e-09))+
+        theme_bw()+
+        labs(title="Tile plot of Mean Absolute Difference", y= "Z2", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+z1z2PlotMaxBandDtAbsDiffexp<-ggplot(z1z2bandDtAbsDiffexp, aes(x = z1, y = z2, fill = Max)) +
+        geom_tile() +
+        scale_fill_gradient(low="red3", high="firebrick4", 
+                           breaks = c(6.71e-08, 8.34e-07)) +
+        theme_bw()+
+        labs(title="Tile plot of Max Absolute Difference", y= "Z1", x="Z2") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+z1z2PlotMeanBandDtRelDiffexp<-ggplot(bandDtRelDiffexp, aes(x = z1, y = z2, fill = Mean)) +
+        geom_tile() +
+        scale_fill_gradient(low="darkgreen", high="olivedrab3", 
+                           breaks = c(1.45e-13, 2.71e-11)) +
+        theme_bw()+
+        labs(title="Tile plot of Mean Relative Difference", y= "Z1", x="Z2") +
+        theme_bw() + 
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+
+z1z2PlotMaxBandDtRelDiffexp<-ggplot(bandDtRelDiffexp, aes(x = z1, y = z2, fill = Max)) +
+        
+        geom_tile() +
+        scale_fill_gradient(low="olivedrab2", high="gold1", 
+                           breaks = c(1.10e-11, 2.05e-07)) +
+        theme_bw()+
+        labs(title="Tile plot of Max Relative Difference", y= "Z1", x="Z2") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+
+z1z2plotBandmismDt <-ggplot(z1z2BandmismDt, aes(x = z1, y = z2, fill = Mismatches)) +
+        geom_tile() +
+        scale_fill_gradient(low="ghostwhite", high="red" , 
+                            breaks = c(0.00, 0.14)) +
+        theme_bw()+
+        labs(title="Percentage of Mismatches by Bandwidth", y= "Z2", x="Z1") +
+        theme(plot.title=element_text(size=rel(1.5)),
+              panel.grid=element_blank(),
+              axis.text=element_text(size=rel(1.3)), 
+              axis.title=element_text(size=rel(1.5)),
+              axis.ticks.length = unit(.3, "cm"),
+              legend.title = element_blank(),
+              legend.key.size = unit(1, "cm"),
+              legend.text = element_text(size = 18),
+              legend.position="bottom")
+```
+
+
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.3, fig.width=10.5}
+
+grid.arrange(yz1PlotMeanBandDtAbsDiffexp, yz1PlotMeanBandDtRelDiffexp, ncol=2)
+
+```
+
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.3, fig.width=10.5}
+
+grid.arrange(yz1PlotBandZeroDtNoNAexp_M , yz1plotBandmismDt, ncol=2)
+
+```
+
+The tileplot of Mean Absolute Difference shows a marked decreasing gradient in $Y$ while $Z1$ seems to a small impact. Mean Relative Difference is homogeneously distributed with respect to bandwidth and are in the order of $10^{-13} - 10^{-11}$ ($10^{-12} - 10^{-9}$ for the Mean Absolute Difference). The third plot shows a marked decreasing gradient in $Z1$ while $Y$ seems to have no effect. However, as in the Separable case, the relative percentage of Zeros is low, with a maximum of $0.46$%, so the representativity of Relative Differences measures holds. Finally, the Mismatch tileplot shows a decreasing gradient with respect to $Z1$ while an higher Percentage of Mismatches occurs for extreme values of the bandwidth of $Y$. Nevertheless, the Percentage of Mismatches does not raise above the $0.14$% 
+
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.3, fig.width=10.5}
+
+grid.arrange(yz2PlotMeanBandDtAbsDiffexp, yz2PlotMeanBandDtRelDiffexp, ncol=2)
+
+```
+
+
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.3, fig.width=10.5}
+
+grid.arrange(yz2PlotBandZeroDtNoNAexp_M , yz2plotBandmismDt, ncol=2)
+
+```
+
+Medium Absolute difference shows a similar pattern to the one above. The decreasing gradient in $Y$ still holds while $Z2$ seems to have almost no impact. Relative Difference graph almost reproduces the plots of $Y$ $Z1$ with an homogeneous distribution with respect to bandwidths and analogous ranges of variation. The relative percentage of Zeros displays a marked decreasing gradient in $Z2$ while seems to be unaffected by $Y$. Finally, the Mismatch tileplot shows a decreasing gradient with respect to $Z2$, while a higher percentage of mismatches occurs for higher values of $Y$.
+
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.3, fig.width=10.5}
+
+grid.arrange(z1z2PlotMeanBandDtAbsDiffexp, z1z2PlotMeanBandDtRelDiffexp, ncol=2)
+
+```
+
+
+```{r, echo=FALSE, results='hide', warning=FALSE, fig.height=6.3, fig.width=10.5}
+
+
+grid.arrange(z1z2PlotBandZeroDtNoNAexp_M , z1z2plotBandmismDt, ncol=2)
+
+```
+
+Similarly to the Separable case, the tileplot of Mean Absolute Difference relative to $Z1$, $Z2$ displays a decreasing gradient in both dimensions and an important role seems to be played by the minimum of the values assumed by the coefficients of the unidimensional bandwidths. Again, Relative Differences are homogeneously distributed with respect to the bandwidths and have analogous ranges of variation with respect to the previous cases. Finally, the percentage of Zeros and Mismatches decreases in both $Z$ coefficients.
+
+###Assessment of mismatches in bandwidth ranking
+
+In this paragraph it is reported an assessment of the mismatches in the rankings of bandwidths analogous to the one performed in the Separable case. 
+
+```{r, echo=FALSE, results='hide', warning=FALSE, }
+
+
+#############################
+## Minimum mean LSCVE error ##
+#############################
+
+##################################
+##     Code Moved for plot      ##
+##################################
+#absNoNAexp_M<-lapply(noNAexp_M, abs)
+#absNoNAexp_R<-lapply(noNAexp_R, abs)
+###################################
+meanAbsNoNAexp_M<-lapply(absNoNAexp_M, colMeans)
+meanAbsNoNAexp_R<-lapply(absNoNAexp_R, colMeans)
+rankMeanAbsNoNAexp_M<-lapply(meanAbsNoNAexp_R, rank)
+rankMeanAbsNoNAexp_R<-lapply(meanAbsNoNAexp_R, rank)
+
+pMeanexp<-sapply(1:length(rankMeanAbsNoNAexp_M), function(d){
+        cor.test(rankMeanAbsNoNAexp_M[[d]],rankMeanAbsNoNAexp_R[[d]],
+                method="pearson")[4]
+},simplify=FALSE,USE.NAMES=FALSE)
+
+sumPMeanexp<-sum(unlist(lapply(pMeanexp,function(d){d[1]})))
+
+sMeanexp<-sapply(1:length(rankMeanAbsNoNAexp_M), function(d){
+        cor.test(rankMeanAbsNoNAexp_M[[d]],rankMeanAbsNoNAexp_R[[d]],
+                method="spearman")[4]
+},simplify=FALSE,USE.NAMES=FALSE)
+
+sumSMeanexp<-sum(unlist(lapply(sMeanexp,function(d){d[1]})))
+
+kMeanexp<-sapply(1:length(rankMeanAbsNoNAexp_M), function(d){
+        cor.test(rankMeanAbsNoNAexp_M[[d]],rankMeanAbsNoNAexp_R[[d]],
+                method="kendall")[4]
+},simplify=FALSE,USE.NAMES=FALSE)
+
+sumKMeanexp<-sum(unlist(lapply(kMeanexp,function(d){d[1]})))
+
+csMeanexp<-sapply(1:length(rankMeanAbsNoNAexp_M), function(d){
+                csi(rankMeanAbsNoNAexp_M[[d]],rankMeanAbsNoNAexp_R[[d]])
+},simplify=FALSE,USE.NAMES=FALSE)
+
+sumCSMeanexp<-sum(unlist(lapply(csMeanexp,function(d){d[1]})))
+
+
+##############################################
+## Minimum LSCVE error for every observation ##
+##############################################
+
+#computing rank of the elements of every row 
+#ith column stores the ranks of the ith row
+
+rankObsNoNAexp_M<- lapply(absNoNAexp_M,function(d){
+        apply(d,1,rank,ties.method= "first")})
+
+rankObsNoNAexp_R<- lapply(absNoNAexp_R,function(d){
+        apply(d,1,rank,ties.method= "first")})
+
+pObsexp<-sapply(1:length(rankObsNoNAexp_M), function(d){
+        sapply(1:ncol(rankObsNoNAexp_M[[d]]), function(g){
+                cor.test(rankObsNoNAexp_M[[d]][, g],rankObsNoNAexp_R[[d]][, g],
+                         method="pearson")[4]
+        },USE.NAMES=FALSE)
+}, simplify=FALSE,USE.NAMES=FALSE)
+
+sumPObsexp<-sum(unlist(lapply(pObsexp,function(d){sum(unlist(d))})))
+
+sObsexp<-sapply(1:length(rankObsNoNAexp_M), function(d){
+        sapply(1:ncol(rankObsNoNAexp_M[[d]]), function(g){
+                cor.test(rankObsNoNAexp_M[[d]][, g],rankObsNoNAexp_R[[d]][, g],
+                         method="spearman")[4]
+        },USE.NAMES=FALSE)
+}, simplify=FALSE,USE.NAMES=FALSE)
+
+sumSObsexp<-sum(unlist(lapply(sObsexp,function(d){sum(unlist(d))})))
+
+kObsexp<-sapply(1:length(rankObsNoNAexp_M), function(d){
+        sapply(1:ncol(rankObsNoNAexp_M[[d]]), function(g){
+                cor.test(rankObsNoNAexp_M[[d]][, g],rankObsNoNAexp_R[[d]][, g],
+                        method="kendall")[4]
+        },USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+sumKObsexp<-sum(unlist(lapply(kObsexp,function(d){sum(unlist(d))})))
+
+csObsexp<-sapply(1:length(rankObsNoNAexp_M), function(d){
+        sapply(1:ncol(rankObsNoNAexp_M[[d]]), function(g){
+                csi(rankObsNoNAexp_M[[d]][, g],rankObsNoNAexp_R[[d]][, g])[1]
+        },USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+sumCSObsexp<-sum(unlist(lapply(csObsexp,function(d){sum(unlist(d))})))
+
+#########################
+## Mismatch assessment ##
+#########################
+
+#Positions of rankings where a mismatch arise
+posMismObsexp<-lapply(
+        sapply(1:length(absNoNAexp_M), function(d){
+                sapply(1:nrow(absNoNAexp_M[[d]]), function(g){
+        (sum((rank(absNoNAexp_M[[d]][g, ],ties.method= "first") !=
+                    rank(absNoNAexp_R[[d]][g, ],ties.method= "first"))))>0
+                },USE.NAMES=FALSE)
+        },simplify=FALSE,USE.NAMES=FALSE)
+, which)
+
+#rates of mismatches
+rateMismObsexp<-length(unlist(posMismObsexp))/10000
+
+
+##################################
+##     Code Moved for plot      ##
+##################################
+
+#Cases s.t. mismatch affect the best bandwidth
+#mismUneffObsexp<-sapply(1:length(absNoNAexp_M), function(d){
+#                sapply(1:nrow(absNoNAexp_M[[d]]), function(g){
+#                        which.min(absNoNAexp_M[[d]][g, ]) !=
+#                        which.min(absNoNAexp_R[[d]][g, ])
+#                },USE.NAMES=FALSE)
+#},simplify=FALSE,USE.NAMES=FALSE
+#)
+
+
+#rate of mismatches affecting the best bandwidth
+rateMismBestObsexp<-sum(unlist(mismUneffObsexp))/10000
+#rate of relevant mismatches over total mismatches
+rateMismBestTotObsexp<-rateMismBestObsexp/rateMismObsexp
+
+#Minimum LSCVE for every observation
+minimumLSCVeObsexp<-
+        sapply(1:length(absNoNAexp_M), function(d){
+                sapply(1:nrow(absNoNAexp_M[[d]]), function(g){
+                        min(absNoNAexp_M[[d]][g, ])
+                },USE.NAMES=FALSE)
+        },simplify=FALSE,USE.NAMES=FALSE)
+
+#Sum of LSCVE for every observation in every sample
+sumMinimumLSCVeObsexp<-sum(unlist(minimumLSCVeObsexp))
+
+#Creates a specific dataset containing the LSCVE from M function in cases
+#of mismatch 
+mismObsexpM<-sapply(1:length(posMismObsexp), function(d){
+        sapply(1:length(posMismObsexp[[d]]) , function(g){
+        noNAexp_M[[d]][posMismObsexp[[d]][g],]
+        },USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+#Creates a specific dataset containing the LSCVE from R function in cases
+#of mismatch 
+mismObsexpR<-sapply(1:length(posMismObsexp), function(d){
+        sapply(1:length(posMismObsexp[[d]]) , function(g){
+                noNAexp_R[[d]][posMismObsexp[[d]][g],]
+        },USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+#Index of the bandwidth with lowest LSCVE in case of mismatch
+#(according to M function)
+bestMismObsexpM<-sapply(1:length(mismObsexpM), function(d){
+        apply(mismObsexpM[[d]],2,which.min)
+})
+
+#Index of the bandwidth with lowest LSCVE in case of mismatch
+#(according to R function)
+bestMismObsexpR<-sapply(1:length(mismObsexpR), function(d){
+        apply(mismObsexpR[[d]],2,which.min)
+})
+            
+#Bandwidth with lowest LSCVE in case of mismatch (according to M function)
+bestLSCVeObsexpM<-sapply(1:length(posMismObsexp), function(d){
+        sapply(1:length(posMismObsexp[[d]]) , function(g){
+                absNoNAexp_M[[d]][posMismObsexp[[d]][g],bestMismObsexpM[[d]][g]]
+        },USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+#Bandwidth with lowest LSCVE in case of mismatch (according to R function)
+bestLSCVeObsexpR<-sapply(1:length(posMismObsexp), function(d){
+        sapply(1:length(posMismObsexp[[d]]) , function(g){
+                absNoNAexp_R[[d]][posMismObsexp[[d]][g],bestMismObsexpR[[d]][g]]
+        },USE.NAMES=FALSE)
+},simplify=FALSE,USE.NAMES=FALSE)
+
+#Differences between the minimum LSCVE from the two functions
+diffLSCVeObsexp<-sapply(1:length(bestLSCVeObsexpR), function(d){
+        abs(bestLSCVeObsexpM[[d]]-bestLSCVeObsexpR[[d]])
+},simplify=FALSE,USE.NAMES=FALSE)
+
+#Sum of differences between the minimum LSCVE from the two functions
+sumDiffLSCVeObsexp<-sum(unlist(diffLSCVeObsexp))
+
+#Relative impact of the sum o differences between the minimum LSCVE from the two function over sum of LSCVE for every observation in every sample
+impactMismOnLSCVeexp<-sumDiffLSCVeObsexp/sumMinimumLSCVeObsexp
+```
+
+When considering a minimum mean LSCVE criterion to rank the bandwidths, the rankings generated by the two functions are identical.
+
+```{r, results="asis", echo=FALSE}
+coefMean=data.frame(t(c(sumPMeanexp, sumSMeanexp, sumKMeanexp, sumCSMeanexp)/100))
+names(coefMean)<-c("Pearson", "Spearman", "Kendall", "Dot Prod." )
+pandoc.table(coefMean,style="rmarkdown", split.tables=999, caption="Mean CRS across all observation in every sample", split.cells = rep(1,4), digits = c(5,5,5,5))
+```
+
+When rankings of the bandwidths are computed observation-wise, some mismatches arise.
+
+```{r, results="asis", echo=FALSE}
+coefObsexp=data.frame(t(c(sumPObsexp, sumSObsexp, sumKObsexp, sumCSObsexp)/10000))
+names(coefObsexp)<-c("Pearson", "Spearman", "Kendall", "Dot Prod." )
+pandoc.table(coefObsexp,style="simple", split.tables=999, caption="Mean CRS of every observation", split.cells = rep(1,4), digits = c(6,6,6,6))
+```
+
+The relative percentage of mismatch is $`r rateMismObsexp*100`$%, almost equal to the value assumed in the Separable case. The mismatches affecting the best bandwidth (the one with lowest LSCVE) are the $`r round(rateMismBestObsexp,3)`$% with an impact of $`r round(rateMismBestTotObsexp,3) `$% 
+In this setting, the sum of Absolute Differences between the set of minimum-LSCVE bandwidths is : $`r sumDiffLSCVeObsexp`$. The latter value has an impact of $`r impactMismOnLSCVeexp*100`$% on the sum of absolute LSCVE of the best bandwidth set determined with the `MATLAB` function. Hence, also in the case of Non Separable DGP, the difference in the LSCVE incurred when using `Ker_LSCV_OUT.R` instead of `Ker_LSCV_OUT.m` is negligible. 
+
+
+##Conclusions
+
+Absolute and Relative Difference Maximums are both computed in the Non-Separable case and are both of the order of $10^{-7}$. The highest percentage of mismatches in ranking is the same for the two cases: ~ $`r round(rateMismObsexp*100,0)`$%. 
+To sum up, two measures are proposed as indicative of the reliability of `Ker_LSCV_OUT.R` :
+
+* The maximum Percentage of Mismatches for a single bandwidth (occurring) is $0.46$%. 
+
+* The relative impact of the increase in absolute sum of LSCVE incurred when using `Ker_LSCV_OUT.R` instead of `Ker_LSCV_OUT.m` is in the range of $10^{-12}$% (occuring in the Separable case).
+
+Hence, the reported evidence strongly supports the validity of the function `Ker_LSCV_OUT.R`.
