@@ -25,7 +25,7 @@ This Repo provides the functions:
 
 That implement in the R language the MATLAB function:
 
-Ker_LSCV_OUT.m
+**Ker_LSCV_OUT.m**
 
 Presented in:
 
@@ -42,6 +42,9 @@ The *reproducible* validation reports ( are:
 
 **validation_assessment - EJOR 2010.pdf**  
 **validation_assessment JPA 2011.pdf**
+
+The code to perform the validation is available in Bandwidth Selection\validation\ 
+
 
 The code to perform the validation is available in Bandwidth Selection\validation\ 
 
