@@ -1,8 +1,8 @@
-# bandwidth-selection-CFM## bandwidth-selection-CFM
+## bandwidth-selection-CFM
 
 
 ***
-This repo provides the R functions to evaluate LSCV errors; the first step in a "Conditional Frontier Model" analysis.
+This repo provides the R functions to evaluate LSCV errors; the first step in a "Conditional Frontier Model" analysis.  
 The whole "Conditional Frontier Model" methodology has been developed and used in the fourth Chapter of Duccio Gamannossi degl'Innocenti PhD thesis:
 
 Italian municipalities efﬁciency: A conditional frontier model approach.
@@ -20,7 +20,7 @@ For Further informations on Conditional Frontier Models see the seminal papers:
 
 This Repo provides the functions: 
 
-Ker_LSCV_IN.R 
+Ker_LSCV_IN.R  
 Ker_LSCV_OUT.R
 
 That implement in the R language the MATLAB function:
@@ -31,8 +31,7 @@ Presented in:
 
 * [Optimal bandwidth selection for conditional efficiency measures: A data-driven approach](http://www.sciencedirect.com/science/article/pii/S0377221709002148) by Luiza Bădin, Cinzia Daraio, Léopold Simar.
 
-The R functions proposed extend the MATLAB one allowing to evaluate the bandwidths' LSCV errors also in an input oriented setting.
-
+The R functions proposed extend the MATLAB one allowing to evaluate the bandwidths' LSCV errors also in an input oriented setting.  
 A thorough validation is provided with respect to simulated datasets reproducing the DGPs in:
 
 * [Optimal bandwidth selection for conditional efficiency measures: A data-driven approach](http://www.sciencedirect.com/science/article/pii/S0377221709002148) by Luiza Bădin, Cinzia Daraio, Léopold Simar.
@@ -43,6 +42,10 @@ The *reproducible* validation reports ( are:
 
 *validation_assessment - EJOR 2010.pdf* 
 *validation_assessment JPA 2011.pdf*
+
+The code to perform the validation is available in Bandwidth Selection\validation\ 
+
+
 
 The code to perform the validation is available in Bandwidth Selection\validation\ 
 
