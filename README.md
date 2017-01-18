@@ -34,14 +34,17 @@ Presented in:
 The R functions proposed extend the MATLAB one allowing to evaluate the bandwidths' LSCV errors also in an input oriented setting.  
 A thorough validation is provided with respect to simulated datasets reproducing the DGPs in:
 
-* [Optimal bandwidth selection for conditional efficiency measures: A data-driven approach](http://www.sciencedirect.com/science/article/pii/S0377221709002148) by Luiza Bădin, Cinzia Daraio, Léopold Simar.
+* [Optimal bandwidth selection for conditional efficiency measures: A data-driven approach](http://www.sciencedirect.com/science/article/pii/S0377221709002148) by Luiza Bădin, Cinzia Daraio, Léopold Simar. (**EJOR 2010**)
 
-* [“Two-stage DEA: caveat emptor](http://link.springer.com/article/10.1007/s11123-011-0230-6) by Léopold Simar.
+* [“Two-stage DEA: caveat emptor](http://link.springer.com/article/10.1007/s11123-011-0230-6) by Léopold Simar (**JPA 2011**).
 
 The *reproducible* validation reports ( are:
 
 **validation_assessment - EJOR 2010.pdf**  
-**validation_assessment JPA 2011.pdf**
+**validation_assessment - JPA 2011.pdf**
+
+The code to perform the validation is available in Bandwidth Selection\validation\ 
+
 
 The code to perform the validation is available in Bandwidth Selection\validation\ 
 
