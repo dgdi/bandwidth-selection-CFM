@@ -43,18 +43,4 @@ The *reproducible* validation reports ( are:
 **validation_assessment - EJOR 2010.pdf**  
 **validation_assessment - JPA 2011.pdf**
 
-The code to perform the validation is available in Bandwidth Selection\validation\ 
-
-
-The code to perform the validation is available in Bandwidth Selection\validation\ 
-
-
-The code to perform the validation is available in Bandwidth Selection\validation\ 
-
-
-The code to perform the validation is available in Bandwidth Selection\validation\ 
-
-
-
-The code to perform the validation is available in Bandwidth Selection\validation\ 
-
+The code to perform the validations is available in Bandwidth Selection\validation\ 
