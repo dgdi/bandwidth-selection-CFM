@@ -9,7 +9,7 @@ Italian municipalities efﬁciency: A conditional frontier model approach.
 
 (A short version of the chapter is about to be submitted to the Journal of Productivity Analysis.)
 
-However, the whole methodology is not publicly available yet. 
+However, the whole methodology is not publicly available yet.  
 For informations or requests write to duccio.gama@gmail.com
  
 For Further informations on Conditional Frontier Models see the seminal papers:
@@ -20,8 +20,8 @@ For Further informations on Conditional Frontier Models see the seminal papers:
 
 This Repo provides the functions: 
 
-Ker_LSCV_IN.R  
-Ker_LSCV_OUT.R
+**Ker_LSCV_IN.R**  
+**Ker_LSCV_OUT.R**
 
 That implement in the R language the MATLAB function:
 
@@ -40,8 +40,11 @@ A thorough validation is provided with respect to simulated datasets reproducing
 
 The *reproducible* validation reports ( are:
 
-*validation_assessment - EJOR 2010.pdf* 
-*validation_assessment JPA 2011.pdf*
+**validation_assessment - EJOR 2010.pdf**  
+**validation_assessment JPA 2011.pdf**
+
+The code to perform the validation is available in Bandwidth Selection\validation\ 
+
 
 The code to perform the validation is available in Bandwidth Selection\validation\ 
 
