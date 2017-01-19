@@ -40,8 +40,8 @@ A thorough validation is provided with respect to simulated datasets reproducing
 
 The *reproducible* validation reports are:
 
-**report_validation_assessment - EJOR 2010.pdf**  
-**report_validation_assessment - JPA 2011.pdf**
+**report_validation_assessment-EJOR-2010.pdf**  
+**report_validation_assessment-JPA-2011.pdf**
 
 The code to perform the validation is available in Bandwidth Selection\validation\ 
 
