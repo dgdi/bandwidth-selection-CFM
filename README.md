@@ -38,10 +38,10 @@ A thorough validation is provided with respect to simulated datasets reproducing
 
 * [“Two-stage DEA: caveat emptor](http://link.springer.com/article/10.1007/s11123-011-0230-6) by Léopold Simar (**JPA 2011**).
 
-The *reproducible* validation reports ( are:
+The *reproducible* validation reports are:
 
-**validation_assessment - EJOR 2010.pdf**  
-**validation_assessment - JPA 2011.pdf**
+**report_validation_assessment - EJOR 2010.pdf**  
+**report_validation_assessment - JPA 2011.pdf**
 
 The code to perform the validation is available in Bandwidth Selection\validation\ 
 
