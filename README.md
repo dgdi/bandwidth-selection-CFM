@@ -7,10 +7,8 @@ The whole "Conditional Frontier Model" methodology has been developed and used i
 
 Italian municipalities efﬁciency: A conditional frontier model approach.
 
-(A short version of the chapter is about to be submitted to the Journal of Productivity Analysis.)
-
 However, the whole methodology is not publicly available yet.  
-For informations or requests write to duccio.gama@gmail.com
+For informations or requests write to mail@dgdi.me
  
 For Further informations on Conditional Frontier Models see the seminal papers:
 * [How to measure the impact of environmental factors in a nonparametric production model](http://www.sciencedirect.com/science/article/pii/S0377221712004833) by Luiza Bădin, Cinzia Daraio, Léopold Simar.
